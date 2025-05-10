@@ -3,7 +3,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const userInput = document.getElementById('userInput');
     const sendButton = document.getElementById('sendButton');
 
-    // Function to add a message to the chat
+    // Improved message formatting
     function addMessage(content, isUser = false, context = null) {
         const messageDiv = document.createElement('div');
         messageDiv.className = `message ${isUser ? 'user-message' : 'ai-message'}`;
@@ -12,14 +12,38 @@ document.addEventListener('DOMContentLoaded', () => {
         if (context) {
             const contextDiv = document.createElement('div');
             contextDiv.className = 'context-info';
-            contextDiv.innerHTML = `<strong>Context from:</strong> ${context.metadata.source}<br>${context.content}`;
+            contextDiv.innerHTML = `
+                <div class="context-source">
+                    <strong>Source:</strong> ${context.metadata.source}
+                </div>
+                <div class="context-content">
+                    ${context.content.replace(/\n/g, '<br>')}
+                </div>
+            `;
             messageDiv.appendChild(contextDiv);
         }
         
+        // Process message content
+        const processedContent = content
+            .replace(/\n{2,}/g, '<br><br>')  // Multiple newlines
+            .replace(/\n/g, '<br>')         // Single newlines
+            .replace(/```(\w+)?\n([\s\S]*?)\n?```/g, (match, lang, code) => {
+                return `<pre class="code-block"><code class="language-${lang || ''}">${code.replace(/\n/g, '<br>')}</code></pre>`;
+            });
+
         const textDiv = document.createElement('div');
-        textDiv.textContent = content;
-        messageDiv.appendChild(textDiv);
+        textDiv.className = 'message-text';
+        textDiv.innerHTML = processedContent;
         
+        // Add timestamp for AI messages
+        if (!isUser) {
+            const timestamp = document.createElement('div');
+            timestamp.className = 'message-timestamp';
+            timestamp.textContent = new Date().toLocaleTimeString();
+            textDiv.prepend(timestamp);
+        }
+
+        messageDiv.appendChild(textDiv);
         chatMessages.appendChild(messageDiv);
         chatMessages.scrollTop = chatMessages.scrollHeight;
     }
@@ -57,7 +81,7 @@ document.addEventListener('DOMContentLoaded', () => {
             // Prepare prompt with context if available
             let prompt = message;
             if (context) {
-                prompt = `Context: ${context.content}\n\nQuestion: ${message}\n\nAnswer based on the context provided:`;
+                prompt = `Context:\n${context.content}\n\nQuestion:\n${message}\n\nAnswer based on the context provided:`;
             }
 
             const response = await fetch('http://localhost:11434/api/generate', {
@@ -71,13 +95,16 @@ document.addEventListener('DOMContentLoaded', () => {
                     stream: false,
                     options: {
                         temperature: 0.7,
-                        top_p: 0.9
+                        top_p: 0.9,
+                        num_ctx: 4096,
+                        format: 'markdown'
                     }
                 })
             });
 
             if (!response.ok) {
-                throw new Error(`HTTP error! status: ${response.status}`);
+                const errorData = await response.json();
+                throw new Error(errorData.detail || `HTTP error! status: ${response.status}`);
             }
 
             const data = await response.json();
