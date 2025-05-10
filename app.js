@@ -4,46 +4,62 @@ document.addEventListener('DOMContentLoaded', () => {
     const sendButton = document.getElementById('sendButton');
 
     // Function to add a message to the chat
-    function addMessage(content, isUser = false) {
+    function addMessage(content, isUser = false, context = null) {
         const messageDiv = document.createElement('div');
         messageDiv.className = `message ${isUser ? 'user-message' : 'ai-message'}`;
-        messageDiv.textContent = content;
+        
+        // Add context if available
+        if (context) {
+            const contextDiv = document.createElement('div');
+            contextDiv.className = 'context-info';
+            contextDiv.innerHTML = `<strong>Context from:</strong> ${context.metadata.source}<br>${context.content}`;
+            messageDiv.appendChild(contextDiv);
+        }
+        
+        const textDiv = document.createElement('div');
+        textDiv.textContent = content;
+        messageDiv.appendChild(textDiv);
+        
         chatMessages.appendChild(messageDiv);
         chatMessages.scrollTop = chatMessages.scrollHeight;
     }
 
-    // Function to check if Ollama is accessible
-    async function checkOllamaConnection() {
+    // Function to get context from MCP server
+    async function getContext(query) {
         try {
-            const response = await fetch('http://localhost:11434/api/generate', {
+            const response = await fetch('http://localhost:8000/context/generate', {
                 method: 'POST',
                 headers: {
-                    'Content-Type': 'application/json'
+                    'Content-Type': 'application/json',
                 },
                 body: JSON.stringify({
-                    model: 'phi4',
-                    prompt: 'test',
-                    stream: false
+                    query: query,
+                    n_results: 2
                 })
             });
-            
-            if (response.status === 403) {
-                throw new Error('CORS_ERROR');
+
+            if (!response.ok) {
+                const errorData = await response.json();
+                throw new Error(errorData.detail || `HTTP error! status: ${response.status}`);
             }
-            return true;
+
+            const data = await response.json();
+            return data.contexts;
         } catch (error) {
-            if (error.message === 'CORS_ERROR') {
-                addMessage('Error: CORS is not enabled. Please restart Ollama with:\n\n1. First stop Ollama if it\'s running\n2. Then run: OLLAMA_ORIGINS=* ollama serve\n3. Refresh this page after Ollama restarts');
-            } else if (error.name === 'TypeError') {
-                addMessage('Error: Cannot connect to Ollama. Please ensure Ollama is running on http://localhost:11434');
-            }
-            return false;
+            console.error('Error getting context:', error);
+            return null;
         }
     }
 
-    // Function to send message to Ollama
-    async function sendToOllama(message) {
+    // Function to send message to Ollama with context
+    async function sendToOllama(message, context = null) {
         try {
+            // Prepare prompt with context if available
+            let prompt = message;
+            if (context) {
+                prompt = `Context: ${context.content}\n\nQuestion: ${message}\n\nAnswer based on the context provided:`;
+            }
+
             const response = await fetch('http://localhost:11434/api/generate', {
                 method: 'POST',
                 headers: {
@@ -51,7 +67,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 },
                 body: JSON.stringify({
                     model: 'phi4',
-                    prompt: message,
+                    prompt: prompt,
                     stream: false,
                     options: {
                         temperature: 0.7,
@@ -85,9 +101,31 @@ document.addEventListener('DOMContentLoaded', () => {
         addMessage(message, true);
         userInput.value = '';
 
-        // Get AI response
-        const response = await sendToOllama(message);
-        addMessage(response);
+        try {
+            // Get context from MCP server
+            const contexts = await getContext(message);
+            let response;
+
+            if (contexts && contexts.length > 0) {
+                // Sort contexts by relevance score
+                const bestContext = contexts.reduce((prev, current) => 
+                    (current.relevance_score > prev.relevance_score) ? current : prev
+                );
+
+                // Get AI response with context
+                response = await sendToOllama(message, bestContext);
+                
+                // Add context and response to chat
+                addMessage(response, false, bestContext);
+            } else {
+                // Get AI response without context
+                response = await sendToOllama(message);
+                addMessage(response, false);
+            }
+        } catch (error) {
+            console.error('Error in chat flow:', error);
+            addMessage('Error: Failed to process message. Please try again.', false);
+        }
 
         // Re-enable input and button
         userInput.disabled = false;
@@ -104,10 +142,6 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
-    // Check connection and show initial message
-    checkOllamaConnection().then(isConnected => {
-        if (isConnected) {
-            addMessage('Hello! I am Phi-4. How can I help you today?');
-        }
-    });
+    // Initial greeting
+    addMessage('Hello! I am Phi-4 with RAG capabilities. How can I help you today?');
 });
