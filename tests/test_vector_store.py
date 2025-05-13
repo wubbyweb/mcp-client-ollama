@@ -161,3 +161,75 @@ def test_search_with_metadata_filter(vector_store, sample_documents):
     
     assert len(results["documents"]) > 0
     assert all(meta["source"] == "test1.md" for meta in results["metadatas"])
+
+def test_list_collections_and_embeddings(vector_store, sample_documents):
+    """Test listing all collections and embeddings."""
+    # Add initial documents
+    vector_store.add_documents(
+        chunks=sample_documents["chunks"],
+        embeddings=sample_documents["embeddings"],
+        metadata=sample_documents["metadata"]
+    )
+    
+    # List collections and embeddings
+    result = vector_store.list_collections_and_embeddings()
+    
+    assert "documents" in result
+    collection_data = result["documents"]
+    
+    assert collection_data["count"] == len(sample_documents["chunks"])
+    assert len(collection_data["ids"]) == len(sample_documents["chunks"])
+    assert len(collection_data["metadatas"]) == len(sample_documents["chunks"])
+    
+    if "embeddings" in collection_data:
+        assert len(collection_data["embeddings"]) == len(sample_documents["chunks"])
+        # Check if the embeddings match
+        for i, embedding in enumerate(collection_data["embeddings"]):
+            assert embedding == sample_documents["embeddings"][i]
+    else:
+        print("Note: Embeddings are not available in the collection data.")
+
+def test_clear_all_embeddings(vector_store, sample_documents):
+    """Test clearing all embeddings from all collections."""
+    # Add initial documents
+    vector_store.add_documents(
+        chunks=sample_documents["chunks"],
+        embeddings=sample_documents["embeddings"],
+        metadata=sample_documents["metadata"]
+    )
+    
+    # Clear all embeddings
+    vector_store.clear_all_embeddings()
+    
+    # Verify all documents are removed
+    results = vector_store.collection.get()
+    assert len(results["ids"]) == 0
+
+def test_add_documents_after_clearing(vector_store, sample_documents):
+    """Test adding documents after clearing all embeddings."""
+    # Add initial documents
+    vector_store.add_documents(
+        chunks=sample_documents["chunks"],
+        embeddings=sample_documents["embeddings"],
+        metadata=sample_documents["metadata"]
+    )
+    
+    # Clear all embeddings
+    vector_store.clear_all_embeddings()
+    
+    # Add documents again
+    vector_store.add_documents(
+        chunks=sample_documents["chunks"],
+        embeddings=sample_documents["embeddings"],
+        metadata=sample_documents["metadata"]
+    )
+    
+    # Verify documents were added successfully
+    results = vector_store.collection.get()
+    assert len(results["ids"]) == len(sample_documents["chunks"])
+    
+    # Verify first document was added correctly
+    doc_id = f"{sample_documents['metadata'][0]['source']}_{sample_documents['metadata'][0]['chunk_index']}"
+    result = vector_store.get_document_by_id(doc_id)
+    assert result["document"] == sample_documents["chunks"][0]
+    assert result["metadata"] == sample_documents["metadata"][0]

@@ -182,7 +182,57 @@ async def delete_document(
         
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
-
+    
+@app.delete("/documents/clear")
+async def clear_all_documents(
+    store: VectorStore = Depends(get_vector_store)
+):
+    """Clear all documents from the vector store."""
+    try:
+        store.clear_collection()
+        
+        # Verify that the collection is empty
+        results = store.collection.get()
+        if results["ids"]:
+            raise HTTPException(status_code=500, detail="Failed to clear all documents")
+        
+        return {"status": "success", "message": "All documents cleared"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error clearing documents: {str(e)}")
+    
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host=settings.host, port=settings.port)
+
+@app.get("/collections/list")
+async def list_collections_and_embeddings(
+    store: VectorStore = Depends(get_vector_store)
+):
+    """List all collections and embeddings within each collection."""
+    try:
+        result = store.list_collections_and_embeddings()
+        return {"status": "success", "collections": result}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error listing collections and embeddings: {str(e)}")
+
+@app.get("/collections")
+async def list_collections(
+    store: VectorStore = Depends(get_vector_store)
+):
+    """List all collections in the vector store."""
+    try:
+        collections = store.list_collections()
+        return {"status": "success", "collections": collections}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error listing collections: {str(e)}")
+
+@app.delete("/embeddings/clear")
+async def clear_all_embeddings(
+    store: VectorStore = Depends(get_vector_store)
+):
+    """Clear all embeddings from all collections in the vector store."""
+    try:
+        store.clear_all_embeddings()
+        return {"status": "success", "message": "All embeddings cleared from all collections"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error clearing all embeddings: {str(e)}")

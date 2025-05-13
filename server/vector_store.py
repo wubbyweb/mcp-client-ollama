@@ -20,23 +20,22 @@ class VectorStore:
                 metadata={"hnsw:space": "cosine"}  # Use cosine similarity
             )
 
-    def add_documents(self, 
-                     chunks: List[str],
-                     embeddings: List[List[float]],
-                     metadata: List[Dict[str, Any]]) -> None:
+    def add_documents(self,
+                      chunks: List[str],
+                      embeddings: List[List[float]],
+                      metadata: List[Dict[str, Any]]) -> None:
         """Add document chunks and their embeddings to the vector store."""
-        # Generate unique IDs for each chunk
-        ids = [f"{meta['source']}_{meta['chunk_index']}" for meta in metadata]
-        
         try:
+            ids = [f"{meta['source']}_{meta['chunk_index']}" for meta in metadata]
             self.collection.add(
+                ids=ids,
                 embeddings=embeddings,
                 documents=chunks,
-                metadatas=metadata,
-                ids=ids
+                metadatas=metadata
             )
+            print(f"Successfully added {len(chunks)} documents to the collection.")
         except Exception as e:
-            print(f"Error adding documents to ChromaDB: {e}")
+            print(f"Error adding documents: {e}")
             raise
 
     def search_similar(self, 
@@ -100,8 +99,48 @@ class VectorStore:
     def clear_collection(self) -> None:
         """Clear all documents from the collection."""
         try:
-            self.collection.delete()
-            self.collection = self._get_or_create_collection()
+            all_ids = self.collection.get()["ids"]
+            if all_ids:
+                self.collection.delete(ids=all_ids)
+            print("Cleared all documents from the collection.")
         except Exception as e:
             print(f"Error clearing ChromaDB collection: {e}")
+            raise
+
+    def list_collections_and_embeddings(self) -> Dict[str, Dict[str, Any]]:
+        """List all collections and embeddings within each collection."""
+        try:
+            result = {}
+            collection_data = self.collection.get()
+            result["documents"] = {
+                "count": len(collection_data["ids"]),
+                "ids": collection_data["ids"],
+                "metadatas": collection_data["metadatas"]
+            }
+            if "embeddings" in collection_data and collection_data["embeddings"] is not None:
+                result["documents"]["embeddings"] = collection_data["embeddings"]
+            else:
+                print("Warning: Embeddings are not available in the collection data.")
+            return result
+        except Exception as e:
+            print(f"Error listing collections and embeddings: {e}")
+            raise
+
+    def list_collections(self) -> List[str]:
+        """List all collections in the vector store."""
+        try:
+            return self.client.list_collections()
+        except Exception as e:
+            print(f"Error listing collections: {e}")
+            raise
+
+    def clear_all_embeddings(self) -> None:
+        """Clear all embeddings from all collections in the vector store."""
+        try:
+            all_ids = self.collection.get()["ids"]
+            if all_ids:
+                self.collection.delete(ids=all_ids)
+            print("Cleared all embeddings from the collection.")
+        except Exception as e:
+            print(f"Error clearing all embeddings: {e}")
             raise

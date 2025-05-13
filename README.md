@@ -59,15 +59,9 @@ OLLAMA_ORIGINS=* ollama serve
 ```bash
 ollama pull phi4
 ```
-
-4. Serve the web interface (using Python's built-in server for development):
-```bash
-python -m http.server
+4. Open the application in your browser:
 ```
-
-5. Open the application in your browser:
-```
-http://localhost:8000
+Open  index.html file
 ```
 
 ## Project Structure
@@ -108,6 +102,7 @@ pytest tests/ -v --cov=server
 - `POST /context/generate` - Generate context for a query
 - `GET /documents/list` - List all processed documents
 - `DELETE /documents/{source}` - Delete a document
+- `DELETE /documents/clear` - Clear all documents from the vector store
 
 ## Usage Example
 
@@ -144,3 +139,4 @@ curl -X POST http://localhost:8000/documents/process \
 ## License
 
 MIT License - feel free to use this project as you wish.
+

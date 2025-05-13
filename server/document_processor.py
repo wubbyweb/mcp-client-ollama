@@ -91,7 +91,7 @@ class DocumentProcessor:
         
         for root, _, files in os.walk(directory_path):
             for file in files:
-                if file.endswith('.md'):
+                if file.endswith(('.md', '.txt')):
                     file_path = os.path.join(root, file)
                     result = await self.process_markdown_file(file_path)
                     results.append(result)
